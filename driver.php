@@ -4,7 +4,7 @@
  * 
  * The driver that runs Pheobot.
  */
-use Common\IRC\Bot as Pheobot;
+use IRC\Bot as Pheobot;
 
 require("classes/Common/IRC/bot.php");
 

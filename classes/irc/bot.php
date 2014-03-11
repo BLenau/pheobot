@@ -8,7 +8,7 @@
  * @author Brian M. Lenau
  * @version 0.01
  */
-namespace Common\IRC;
+namespace IRC;
 
 /**
  * An IRC bot that is used to connect to Twitch chat (other chats to be 
@@ -43,7 +43,14 @@ class Bot {
      * 
      * @var string
      */
-    private $nick = "Pheobot";
+    private $nickname = "Pheobot";
+
+    /**
+     * The password to connect to the server
+     * 
+     * @var string
+     */
+    private $password = "";
     
     /**
      * The maximum number of reconnects before the bot will exit.
@@ -98,6 +105,7 @@ class Bot {
      */
     public function __construct($config = array()) {
     	$this->open_logs();
+    	$this->connection = new \IRC\Connection\Socket;
         if (count($config) === 0) {
             return;
         }
@@ -115,6 +123,14 @@ class Bot {
      * Connects the bot to the server.
      */
     public function connect() {
+    	if ($this->connection->connected()) {
+    		$this->connection->disconnect();
+    	}
+    	$this->log("Connecting to server...");
+    	$this->connection->connect();
+    	$this->send("USER $this->nickname");
+    	$this->send("PASS $this->password");
+    	$this->send("NICK $this->nickname");
     }
     
     /**
@@ -128,8 +144,9 @@ class Bot {
      * 
      * @param string $command The command to send to the server.
      */
-    public function send($command) {
-    	$this->log($command, 'SEND');
+    public function send($data) {
+    	$this->log($data, 'SEND');
+    	$this->connection->send($data);
     }
     
     /**
@@ -190,6 +207,15 @@ class Bot {
      */
     public function set_nickname($nickname) {
     	$this->nickname = (string) $nickname;
+    }
+
+    /**
+     * Sets the password of the bot.
+     * 
+     * @param string $password The password of the bot
+     */
+    public function set_password($password) {
+    	$this->password = (string) $password;
     }
     
     /**
