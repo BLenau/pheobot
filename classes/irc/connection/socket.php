@@ -9,26 +9,28 @@
  */
 namespace IRC\Connection;
 
+require("connection.php");
+
 /**
  * A class that uses sockets to connect and interact with an IRC server.
  *
  * @author Brian M. Lenau
  */
-class Socket extends IRC\Connection {
+class Socket implements Connection {
 	
 	/**
 	 * The address of the server that will be connected to.
 	 * 
 	 * @var string
 	 */
-	private $server = '';
+	private $server = 'irc.twitch.tv';
 	
 	/**
 	 * The port that will be used to connect to the server.
 	 * 
 	 * @var int
 	 */
-	private $port = 0;
+	private $port = 6667;
 	
 	/**
 	 * The socket that will connect to the server and will be used to send and
@@ -49,8 +51,10 @@ class Socket extends IRC\Connection {
 	 * Connect to a server.
 	 */
 	public function connect() {
-		$this->disconnect();
-		$this->socket = fopen($this->server, $this->port);
+		$this->socket = fsockopen($this->server, $this->port);
+		if (!$this->connected()) {
+			throw new Exception("Unable to connect to the ther server {$this->server}:{$this->port} using fsockopen");
+		}
     }
 	
 	/**
@@ -80,7 +84,7 @@ class Socket extends IRC\Connection {
 	 * @return string|boolean The data string received from the server or
 	 * 						  FALSE if an error occurred or no data was available
 	 */
-	public function recv() {
+	public function receive() {
 		return fgets($this->socket, 1024);
 	}
 	

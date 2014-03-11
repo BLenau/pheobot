@@ -42,7 +42,7 @@ interface Connection {
 	 * @return string|boolean The data string received from the server or
 	 * 						  FALSE if an error occurred or no data was available
 	 */
-	public function recv();
+	public function receive();
 	
 	/**
 	 * Checks the status of the connection.

@@ -10,6 +10,9 @@
  */
 namespace IRC;
 
+require("connection/socket.php");
+require("../db/mysql.php");
+
 /**
  * An IRC bot that is used to connect to Twitch chat (other chats to be 
  * implemented later).  This bot should be able to read the chat and react
@@ -23,6 +26,13 @@ class Bot {
      * @var \Common\Connection
      */
     private $connection;
+    
+    /**
+     * The controller used to interact with the database.
+     * 
+     * @var DatabaseController
+     */
+    private $controller;
     
     /**
      * A list of the channels that the bot should be connected to.
@@ -88,6 +98,20 @@ class Bot {
     private $log_fp;
     
     /**
+     * The owner of the chat channel.
+     * 
+     * @var string
+     */
+    private $owner;
+    
+    /**
+     * An array containing the mods for the channel.
+     * 
+     * @var array
+     */
+    private $mods;
+    
+    /**
      * The method used for logging.
      * Valid values:
      *     screen - Writes log to stdout
@@ -106,6 +130,7 @@ class Bot {
     public function __construct($config = array()) {
     	$this->open_logs();
     	$this->connection = new \IRC\Connection\Socket;
+		$this->controller = new \DB\MySQLController;
         if (count($config) === 0) {
             return;
         }
@@ -131,6 +156,8 @@ class Bot {
     	$this->send("USER $this->nickname");
     	$this->send("PASS $this->password");
     	$this->send("NICK $this->nickname");
+    	
+    	$this->do_work();
     }
     
     /**
@@ -159,17 +186,187 @@ class Bot {
     	if (empty($status)) {
     		$status = "LOUT";
     	}
+    	$log = str_replace(array(chr(10), chr(13)), '', $log);
+    	$log .= "\r\n";
     	$now = date("Y-m-d H:i:s");
     	$status = "$now [$status]";
     	while (strlen($status) < 6) {
     		$status .= " ";
     	}
     	
-    	$log = "$status $log\n";
+    	$log = "$status $log";
     	
     	foreach ($this->log_fp as $fp) {
     		fwrite($fp, $log);
     	}
+    }
+    /**
+     * Opens the log files for logging.
+     */
+    private function open_logs() {
+        $this->log_fp = array();
+        if ($this->log_type == "screen" || $this->log_type == "both") {
+            $this->log_fp[] = fopen("php://stdout", "w");
+        }
+        if ($this->log_type == "file" || $this->log_type == "both") {
+            $this->log_fp[] = fopen("{$this->log_dir}{$this->log_file}", "a");
+        }
+    }
+
+    /**
+     * Close any files that are currently open for logging.
+     */
+    private function close_logs() {
+    	foreach ($this->log_fp as $fp) {
+    		if ($fp) {
+    			fclose($fp);
+    		}
+    	}
+    }
+    
+    /**
+     * Configures the bot with the given configuration array.
+     * 
+     * @param array $config The array containing the configu
+     */
+    private function configure($config) {
+    	$this->set_server($config['server']);
+    	$this->set_port($config['port']);
+    	$this->set_channel($config['channel']);
+    	$this->set_name($config['name']);
+    	$this->set_nickname($config['nickname']);
+    	$this->set_max_reconnects($config['max_reconnects']);
+    	$this->set_log_file($config['log_file']);
+    	$this->set_log_file($config['log_type']);
+    }
+    
+    /**
+     * Joins one or more channels.
+     * 
+     * @param mixed $channel The channel name of the channel to join
+     *                       or an array of channel names to join
+     */
+    private function join($channel) {
+    	if (is_array($channel)) {
+    		foreach ($channel as $ch) {
+    			$this->send("JOIN $ch");
+    		}
+    	} else {
+    		$this->send("JOIN $channel");
+    	}
+    }
+    
+    /**
+     * The workhorse function of the class.  Contains the loop that does all the work.
+     */
+    private function do_work() {
+    	$go = true;
+    	while ($go) {
+    		$data = $this->connection->receive();
+    		$this->log($data, 'RECV');
+    		
+    		$args = explode(' ', $data);
+    		if ($args[0] == 'PING') {
+    			$this->send("PONG {$args[1]}");
+    		}
+
+    		if (isset($args[1])) {
+                if (intval($args[1]) == 376) {
+                    $this->join($this->channel);
+                }
+                if ($args[1] == "MODE") {
+                	$this->set_mode($data);
+                }
+    			if ($args[1] == "PRIVMSG") {
+    				$this->process_command($data);
+    			}
+    		}
+    	}
+    }
+    
+    /**
+     * Sets the user modes for the chat.
+     * 
+     * @param string $line The line that was read in containing user mode data
+     */
+    private function set_mode($line) {
+    	$args = explode(' ', $line);
+    	$mode = $args[3];
+    	switch ($mode) {
+    		case "+o":
+    			$this->owner = $args[4];
+    			break;
+    	}
+    }
+    
+    /**
+     * Processes a command that has been sent to the bot.
+     * 
+     * @param string $line The line that was read in containing the command
+     */
+    private function process_command($line) {
+    	$args = explode(' ', $line);
+    	$command = "";
+        for ($i = 3; $i < count($args); $i++) {
+            $command .= $args[$i];
+        }
+        $command = substr($command, 1);
+        if (stripos($command, '!') === 0) {
+            $user = explode('!', $args[0]);
+            $user = substr($user[0], 1);
+            $com_args = explode(' ', $command);
+            $cmd = $com_args[0];
+            $this->check_command($cmd);
+            $this->run_command($command);
+        }
+    }
+    
+    /**
+     * Checks that a command exists and that the user has the permission to
+     * call it.
+     * 
+     * @param string $command The command that is being checked
+     * @param string $user The user who invoked the command
+     */
+    private function check_command($command, $user) {
+    	if ($user == $this->owner) {
+    		return true;
+    	}
+    }
+    
+    /**
+     * Runs a given command.
+     * 
+     * @param string $command The command to be run
+     */
+    private function run_command($command) {
+    	$args = explode(' ', $command);
+    	$cmd = $args[0];
+    	$params = array();
+    	for ($i = 1; $i < count($args); $i++) {
+    		$params[] = $args[$i];
+    	}
+    	
+    	$query = "CALL pb_retrieve_command('$cmd')";
+    	$results = $this->controller->query($query);
+
+    	if ($results) {
+    		foreach ($results as $result) {
+                $this->send("PRIVMSG {$channel[0]} :$result");
+            }
+    	}
+    }
+    
+    /**
+     * Adds a command to the list of commands in the database.
+     * 
+     * @param string $name The name of the command to add
+     * @param string $command The command that will be executed when the new
+     * 						  command is invoked.
+     */
+    private function add_command($name, $command) {
+    	$query = "CALL pb_add_command('$name', '$command')";
+    	$this->controller->query($query);
     }
     
     /**
@@ -260,59 +457,5 @@ class Bot {
     	$this->open_logs();
     }
     
-    /**
-     * Opens the log files for logging.
-     */
-    private function open_logs() {
-        $this->log_fp = array();
-        if ($this->log_type == "screen" || $this->log_type == "both") {
-            $this->log_fp[] = fopen("php://stdout", "w");
-        }
-        if ($this->log_type == "file" || $this->log_type == "both") {
-            $this->log_fp[] = fopen("{$this->log_dir}{$this->log_file}", "a");
-        }
-    }
-
-    /**
-     * Close any files that are currently open for logging.
-     */
-    private function close_logs() {
-    	foreach ($this->log_fp as $fp) {
-    		if ($fp) {
-    			fclose($fp);
-    		}
-    	}
-    }
-    
-    /**
-     * Configures the bot with the given configuration array.
-     * 
-     * @param array $config The array containing the configu
-     */
-    private function configure($config) {
-    	$this->set_server($config['server']);
-    	$this->set_port($config['port']);
-    	$this->set_channel($config['channel']);
-    	$this->set_name($config['name']);
-    	$this->set_nickname($config['nickname']);
-    	$this->set_max_reconnects($config['max_reconnects']);
-    	$this->set_log_file($config['log_file']);
-    	$this->set_log_file($config['log_type']);
-    }
-    
-    /**
-     * Joins one or more channels.
-     * 
-     * @param mixed $channel The channel name of the channel to join
-     *                       or an array of channel names to join
-     */
-    private function join($channel) {
-    }
-    
-    /**
-     * The workhorse function of the class.  Contains the loop that does all the work.
-     */
-    private function do_work() {
-    }
 }
 ?>
