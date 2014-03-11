@@ -8,7 +8,7 @@
  * @author Brian M. Lenau
  * @version 0.01
  */
-namespace DB;
+namespace IRC\DB;
 
 require('database.php');
 
@@ -87,6 +87,42 @@ class MySQLController implements DatabaseController {
 			$ret = null;
 		}
 		return $ret;
+	}
+	
+	/**
+	 * Sets the host location for the database.
+	 * 
+	 * @param string
+	 */
+	public function set_host($host) {
+	    $this->host = $host;
+	}
+	
+	/**
+	 * Sets the user location for the database.
+	 * 
+	 * @param string
+	 */
+	public function set_user($user) {
+	    $this->user = $user;
+	}
+	
+	/**
+	 * Sets the pass location for the database.
+	 * 
+	 * @param string
+	 */
+	public function set_pass($pass) {
+	    $this->pass = $pass;
+	}
+	
+	/**
+	 * Sets the db location for the database.
+	 * 
+	 * @param string
+	 */
+	public function set_db($db) {
+	    $this->db = $db;
 	}
 }
 ?>

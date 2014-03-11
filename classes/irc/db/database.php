@@ -7,7 +7,7 @@
  * @author Brian M. Lenau
  * @version 0.01
  */
-namespace DB;
+namespace IRC\DB;
 
 /**
  * And interface used as a means to interact with a database system.

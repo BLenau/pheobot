@@ -11,7 +11,7 @@
 namespace IRC;
 
 require("connection/socket.php");
-require("../db/mysql.php");
+require("db/mysql.php");
 
 /**
  * An IRC bot that is used to connect to Twitch chat (other chats to be 
@@ -30,16 +30,23 @@ class Bot {
     /**
      * The controller used to interact with the database.
      * 
-     * @var DatabaseController
+     * @var \DB\DatabaseController
      */
     private $controller;
+    
+    /**
+     * The controller configuration file.
+     * 
+     * @var string
+     */
+    private $controller_file = "../../config/config_mysql.php";
     
     /**
      * A list of the channels that the bot should be connected to.
      * 
      * @var array
      */
-    private $channel = array();
+    private $channel = "";
     
     /**
      * The name of the bot. Defaults to Pheobot.
@@ -109,7 +116,7 @@ class Bot {
      * 
      * @var array
      */
-    private $mods;
+    private $mods = array();
     
     /**
      * The method used for logging.
@@ -119,7 +126,15 @@ class Bot {
      *     both   - Writes log to both stdout and a logfile
      * 
      */
-    private $log_type = "both";
+    private $log_type = "file";
+    
+    /**
+     * The time stamp of the last message sent by the bot.
+     * This is to make sure that the bot does not send too many messages.
+     * 
+     * @var string
+     */
+    private $last_com = "1991-03-08";
     
     /**
      * Creates a new Bot.
@@ -130,7 +145,7 @@ class Bot {
     public function __construct($config = array()) {
     	$this->open_logs();
     	$this->connection = new \IRC\Connection\Socket;
-		$this->controller = new \DB\MySQLController;
+		$this->controller = new \IRC\DB\MySQLController;
         if (count($config) === 0) {
             return;
         }
@@ -148,6 +163,12 @@ class Bot {
      * Connects the bot to the server.
      */
     public function connect() {
+        require($this->controller_file);
+        $this->controller->set_host($host);
+        $this->controller->set_user($user);
+        $this->controller->set_pass($pass);
+        $this->controller->set_db($db);
+
     	if ($this->connection->connected()) {
     		$this->connection->disconnect();
     	}
@@ -184,7 +205,7 @@ class Bot {
      */
     public function log($log, $status = '') {
     	if (empty($status)) {
-    		$status = "LOUT";
+    		$status = "LOG";
     	}
     	$log = str_replace(array(chr(10), chr(13)), '', $log);
     	$log .= "\r\n";
@@ -247,13 +268,7 @@ class Bot {
      *                       or an array of channel names to join
      */
     private function join($channel) {
-    	if (is_array($channel)) {
-    		foreach ($channel as $ch) {
-    			$this->send("JOIN $ch");
-    		}
-    	} else {
-    		$this->send("JOIN $channel");
-    	}
+        $this->send("JOIN #$channel");
     }
     
     /**
@@ -316,8 +331,9 @@ class Bot {
             $user = substr($user[0], 1);
             $com_args = explode(' ', $command);
             $cmd = $com_args[0];
-            $this->check_command($cmd);
-            $this->run_command($command);
+            $this->update_roles();
+            $run = $this->check_command($cmd, $user);
+            $this->run_command($run);
         }
     }
     
@@ -327,11 +343,30 @@ class Bot {
      * 
      * @param string $command The command that is being checked
      * @param string $user The user who invoked the command
+     * 
+     * @return string|boolean The command to execute if the permissions check
+     *                        out or false if they don't
      */
     private function check_command($command, $user) {
-    	if ($user == $this->owner) {
-    		return true;
-    	}
+        $query = "CALL retrieve_command('$command')";
+        $results = $controller->query($query);
+        
+        $run = false;
+        if (count($results) > 0) {
+            $mode = $results['mode'];
+            if ($user == $this->owner) {
+                $run = results;
+            } else {
+                if ($mode == 'mod') {
+                    if (in_array($user, $this->mods)) {
+                        $run = $results;
+                    }
+                } else if ($mode == 'all') {
+                    $run = $results;
+                }
+            }
+        }
+        return $run;
     }
     
     /**
@@ -340,21 +375,9 @@ class Bot {
      * @param string $command The command to be run
      */
     private function run_command($command) {
-    	$args = explode(' ', $command);
-    	$cmd = $args[0];
-    	$params = array();
-    	for ($i = 1; $i < count($args); $i++) {
-    		$params[] = $args[$i];
-    	}
-    	
-    	$query = "CALL pb_retrieve_command('$cmd')";
-    	$results = $this->controller->query($query);
-
-    	if ($results) {
-    		foreach ($results as $result) {
-                $this->send("PRIVMSG {$channel[0]} :$result");
-            }
-    	}
+        $command = json_decode($command);
+        $action = $command->action;
+        $params = $command->params;
     }
     
     /**
@@ -365,8 +388,22 @@ class Bot {
      * 						  command is invoked.
      */
     private function add_command($name, $command) {
-    	$query = "CALL pb_add_command('$name', '$command')";
+    	$query = "CALL add_command('$name', '$command')";
     	$this->controller->query($query);
+    }
+    
+    /**
+     * Updates the roles of all the users on the chat.
+     */
+    private function update_roles() {
+        @$json = file_get_contents("https://tmi.twitch.tv/group/user/pheogia/chatters");
+        if ($json) {
+            $chatters = json_decode($json);
+            $this->mods = array();
+            foreach ($chatters->chatters->moderators as $mod) {
+                $this->mods[] = $mod;
+            }
+        }
     }
     
     /**
@@ -394,7 +431,9 @@ class Bot {
      *                       to connect to
      */
     public function set_channel($channel) {
-        $this->channel = (array) $channel;
+        $this->channel = $channel;
+        $this->owner = $channel;
+        $this->set_log_file("{$this->nickname}.{$this->channel}.log");
     }
 
     /**
@@ -404,6 +443,7 @@ class Bot {
      */
     public function set_nickname($nickname) {
     	$this->nickname = (string) $nickname;
+        $this->set_log_file("{$this->nickname}.{$this->channel}.log");
     }
 
     /**
@@ -457,5 +497,13 @@ class Bot {
     	$this->open_logs();
     }
     
+    /**
+     * Sets the controller configuation file.
+     * 
+     * @param string 
+     */
+    public function set_controller_file($config_file) {
+        $this->controller_file = $config_file;
+    }
 }
 ?>
