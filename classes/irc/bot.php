@@ -11,7 +11,7 @@
 namespace IRC;
 
 require("connection/socket.php");
-require("db/mysql.php");
+//require("db/mysql.php");
 
 /**
  * An IRC bot that is used to connect to Twitch chat (other chats to be 
@@ -33,6 +33,15 @@ class Bot {
      * @var \DB\DatabaseController
      */
     private $controller;
+    
+    /**
+     * The type of controller to use.
+     * Options -
+     *     MySQL - A controller that uses MySQL to connect to a database
+     * 
+     * @var string
+     */
+    private $controller_type = "MySQL";
     
     /**
      * The controller configuration file.
@@ -76,6 +85,14 @@ class Bot {
      * @var int
      */
     private $max_reconnects = 0;
+    
+    /**
+     * The handler that is responsible for all commands.
+     * 
+     * @var \IRC\Commands\Handler
+     */
+    private $command_handler;
+
     /**
      * The prefix that is used to define that a command is being invoked.
      * 
@@ -146,10 +163,6 @@ class Bot {
     	$this->open_logs();
     	$this->connection = new \IRC\Connection\Socket;
 		$this->controller = new \IRC\DB\MySQLController;
-        if (count($config) === 0) {
-            return;
-        }
-        $this->configure($config);
     }
     
     /**
@@ -163,11 +176,7 @@ class Bot {
      * Connects the bot to the server.
      */
     public function connect() {
-        require($this->controller_file);
-        $this->controller->set_host($host);
-        $this->controller->set_user($user);
-        $this->controller->set_pass($pass);
-        $this->controller->set_db($db);
+        create_controller();
 
     	if ($this->connection->connected()) {
     		$this->connection->disconnect();
@@ -195,6 +204,16 @@ class Bot {
     public function send($data) {
     	$this->log($data, 'SEND');
     	$this->connection->send($data);
+    }
+    
+    /**
+     * Sends a message to the chat.  This method differs from send() by
+     * prepending the "PRIVMSG #CHANNEL_NAME :" to the data.
+     * 
+     * @param string $message The message to send to the chat
+     */
+    public function send_message($data) {
+        $this->send("PRIVMSG #$channel :$data");
     }
     
     /**
@@ -246,19 +265,20 @@ class Bot {
     }
     
     /**
-     * Configures the bot with the given configuration array.
-     * 
-     * @param array $config The array containing the configu
+     * Creates a new database controller.
      */
-    private function configure($config) {
-    	$this->set_server($config['server']);
-    	$this->set_port($config['port']);
-    	$this->set_channel($config['channel']);
-    	$this->set_name($config['name']);
-    	$this->set_nickname($config['nickname']);
-    	$this->set_max_reconnects($config['max_reconnects']);
-    	$this->set_log_file($config['log_file']);
-    	$this->set_log_file($config['log_type']);
+    private function create_controller() {
+        require($this->controller_file);
+
+        $l_type = strtolower($this->controller_type);
+        require("db/$l_type.php");
+
+        $type = "\IRC\DB\{$this->controller_type}";
+        $this->controller = new $type;
+        $this->controller->set_host($host);
+        $this->controller->set_user($user);
+        $this->controller->set_pass($pass);
+        $this->controller->set_db($db);
     }
     
     /**
@@ -333,7 +353,10 @@ class Bot {
             $cmd = $com_args[0];
             $this->update_roles();
             $run = $this->check_command($cmd, $user);
-            $this->run_command($run);
+            $data = $this->run_command($run);
+            if ($data) {
+                $this->update_command($cmd, $data);
+            }
         }
     }
     
@@ -375,9 +398,16 @@ class Bot {
      * @param string $command The command to be run
      */
     private function run_command($command) {
-        $command = json_decode($command);
-        $action = $command->action;
-        $params = $command->params;
+        $command = json_decode($command, true);
+        $action = $command['action'];
+        $params = $command['params'];
+        $data = $command['data'];
+        
+        if (method_exists($action)) {
+        	$ret = $action($params, $data);
+        }
+        
+        return $ret;
     }
     
     /**
@@ -398,13 +428,67 @@ class Bot {
     private function update_roles() {
         @$json = file_get_contents("https://tmi.twitch.tv/group/user/pheogia/chatters");
         if ($json) {
-            $chatters = json_decode($json);
+            $chatters = json_decode($json, true);
             $this->mods = array();
-            foreach ($chatters->chatters->moderators as $mod) {
+            foreach ($chatters['chatters']['moderators'] as $mod) {
                 $this->mods[] = $mod;
             }
         }
     }
+
+    /** ------------------------------------------------------------------- **
+     * Reserved Commands
+     ** ------------------------------------------------------------------- **/
+
+    /**
+     * Displays a list of moderators.
+     * 
+     * @param string $cmd The name of the command that is being executed
+     * @param array $params The array of parameters retrieved from the database
+     * $params -
+     *     mod => The permission level to display
+     *         - moderators
+     *         - staff
+     *         - admins
+     *         - viewers
+     *         - chatter_count
+     * @param array $data The array of data retrieved from the database
+     * $data -
+     *     last_count - The user count the last time this command was invoked.
+     */
+    private function chat_list($cmd, $params, $data) {
+    	$mod = $params['mod'];
+    	@$json = file_get_contents("https://tmi.twitch.tv/group/user/$channel/chatters");
+    	if ($json) {
+    		$chatters = json_decode($json, true);
+    		if ($mod == 'chatter_count') {
+    			$count = $chatters[$mod];
+    			$last_count = $data['last_count'];
+    			$diff = $count - $last_count;
+    			$output = "Viewer count   => $count "
+    				    . "Previous count => $last_count "
+    				    . "Change         => $diff      ";
+    			$this->send_message($output);
+    			$data['last_count'] = $count;
+    			$data = $json_encode($data);
+    			$query = "CALL update_command_data('$data')";
+    			$this->controller->query($query);
+    		}
+    		$list = $chatters['chatters'][$mod];
+    		$pretty_mod = ucfirst($mod);
+    		$output = "The online $pretty_mod are:";
+    		$comma = "";
+    		for ($i = 0; $i < count($list); $i++) {
+    		    $output .= "$comma {$list[$i]}";
+    		    $comma = ",";
+    		}
+    	}
+    }
+    
+    
+    /** ------------------------------------------------------------------- **
+     * Setters
+     ** ------------------------------------------------------------------- **/
     
     /**
      * Sets the server.
@@ -504,6 +588,20 @@ class Bot {
      */
     public function set_controller_file($config_file) {
         $this->controller_file = $config_file;
+        create_controller();
+    }
+    
+    /**
+     * Sets the controller type to use.
+     * 
+     * @param string
+     */
+    public function set_controller_type($type) {
+        $l_type = strtolower($type);
+        if (file_exists("db/$l_type.php")) {
+            $this->controller_type = $type;
+            create_controller();
+        }
     }
 }
 ?>
