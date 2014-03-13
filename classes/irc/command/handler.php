@@ -15,6 +15,13 @@ namespace IRC\Command;
  * @author Brian M. Lenau
  */
 interface Handler {
+
+    /**
+     * Return a list of currently available commands.
+     * 
+     * @return array The list of currently available commands
+     */
+    public function get_commands();
     
     /**
      * Execute a command.

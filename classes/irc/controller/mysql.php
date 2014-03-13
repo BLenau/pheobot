@@ -72,6 +72,8 @@ class MySQLController implements DatabaseController {
 	 * Run queries on a database.
 	 * 
 	 * @param string $query The query to be executed on the database.
+	 * 
+	 * @return array An associative array of the results
 	 */
 	public function query($query) {
 		$results = $this->connection->query($query);
@@ -88,6 +90,33 @@ class MySQLController implements DatabaseController {
 		}
 		return $ret;
 	}
+	
+	/**
+	 * Calls a stored procedure on the database.
+	 * 
+	 * @param string $name The name of the tored procedure to call
+	 * @param array $params An array of the parameters to pass to the stored procedure.
+	 * 
+	 * @return array An associative array of the results
+	 */
+	public function proc($name, $params = "") {
+	    $query = "CALL $name(";
+	    $comma = "";
+	    if (!empty($params)) {
+            foreach ($params as $param) {
+                if (is_string($param)) {
+                    $param = "$comma '$param'";
+                } else {
+                    $param = "$comma $param";
+                }
+                $comma = ",";
+            }
+	    }
+	    $query .= ")";
+	    
+	    return $this->query($query);
+	}
+	
 	
 	/**
 	 * Sets the host location for the database.

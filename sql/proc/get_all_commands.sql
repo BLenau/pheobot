@@ -4,7 +4,7 @@
 -- --------------------------------------------------------------------------------
 DELIMITER $$
 
-CREATE DEFINER=`blenau`@`localhost` PROCEDURE `check_command`(
-)
+CREATE DEFINER=`blenau`@`localhost` PROCEDURE `get_all_commands`()
 BEGIN
+	SELECT name FROM commands;
 END 

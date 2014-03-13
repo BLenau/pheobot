@@ -162,7 +162,6 @@ class Bot {
     public function __construct($config = array()) {
     	$this->open_logs();
     	$this->connection = new \IRC\Connection\Socket;
-		$this->controller = new \IRC\DB\MySQLController;
     }
     
     /**
@@ -176,8 +175,6 @@ class Bot {
      * Connects the bot to the server.
      */
     public function connect() {
-        create_controller();
-
     	if ($this->connection->connected()) {
     		$this->connection->disconnect();
     	}
@@ -313,7 +310,7 @@ class Bot {
                 	$this->set_mode($data);
                 }
     			if ($args[1] == "PRIVMSG") {
-    				$this->process_command($data);
+    				$this->handler->execute($data);
     			}
     		}
     	}
@@ -332,94 +329,6 @@ class Bot {
     			$this->owner = $args[4];
     			break;
     	}
-    }
-    
-    /**
-     * Processes a command that has been sent to the bot.
-     * 
-     * @param string $line The line that was read in containing the command
-     */
-    private function process_command($line) {
-    	$args = explode(' ', $line);
-    	$command = "";
-        for ($i = 3; $i < count($args); $i++) {
-            $command .= $args[$i];
-        }
-        $command = substr($command, 1);
-        if (stripos($command, '!') === 0) {
-            $user = explode('!', $args[0]);
-            $user = substr($user[0], 1);
-            $com_args = explode(' ', $command);
-            $cmd = $com_args[0];
-            $this->update_roles();
-            $run = $this->check_command($cmd, $user);
-            $data = $this->run_command($run);
-            if ($data) {
-                $this->update_command($cmd, $data);
-            }
-        }
-    }
-    
-    /**
-     * Checks that a command exists and that the user has the permission to
-     * call it.
-     * 
-     * @param string $command The command that is being checked
-     * @param string $user The user who invoked the command
-     * 
-     * @return string|boolean The command to execute if the permissions check
-     *                        out or false if they don't
-     */
-    private function check_command($command, $user) {
-        $query = "CALL retrieve_command('$command')";
-        $results = $controller->query($query);
-        
-        $run = false;
-        if (count($results) > 0) {
-            $mode = $results['mode'];
-            if ($user == $this->owner) {
-                $run = results;
-            } else {
-                if ($mode == 'mod') {
-                    if (in_array($user, $this->mods)) {
-                        $run = $results;
-                    }
-                } else if ($mode == 'all') {
-                    $run = $results;
-                }
-            }
-        }
-        return $run;
-    }
-    
-    /**
-     * Runs a given command.
-     * 
-     * @param string $command The command to be run
-     */
-    private function run_command($command) {
-        $command = json_decode($command, true);
-        $action = $command['action'];
-        $params = $command['params'];
-        $data = $command['data'];
-        
-        if (method_exists($action)) {
-        	$ret = $action($params, $data);
-        }
-        
-        return $ret;
-    }
-    
-    /**
-     * Adds a command to the list of commands in the database.
-     * 
-     * @param string $name The name of the command to add
-     * @param string $command The command that will be executed when the new
-     * 						  command is invoked.
-     */
-    private function add_command($name, $command) {
-    	$query = "CALL add_command('$name', '$command')";
-    	$this->controller->query($query);
     }
     
     /**
