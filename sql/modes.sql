@@ -7,5 +7,17 @@ DROP TABLE IF EXISTS modes;
 CREATE TABLE modes (
     id INTEGER PRIMARY KEY AUTO_INCREMENT NOT NULL,
     mode VARCHAR(50) NOT NULL DEFAULT "",
-    code INTEGER NOT NULL DEFAULT 0,
+    code INTEGER NOT NULL DEFAULT 0
 );
+
+INSERT INTO modes (mode, code)
+VALUES ("Owner", 0);
+
+INSERT INTO modes (mode, code)
+VALUES ("Channel Owner", 1);
+
+INSERT INTO modes (mode, code)
+VALUES ("Moderator", 2);
+
+INSERT INTO modes (mode, code)
+VALUES ("All", 3);

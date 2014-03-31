@@ -6,11 +6,13 @@ DELIMITER $$
 
 USE `pheobot`;
 
-DROP PROCEDURE IF EXISTS `get_all_commands`;
-CREATE DEFINER=`blenau`@`localhost` PROCEDURE `get_all_commands`(
+DROP PROCEDURE IF EXISTS `add_global`;
+CREATE DEFINER=`blenau`@`localhost` PROCEDURE `add_global`(
+IN global_name VARCHAR(50),
+IN global_value TEXT,
 IN this_channel VARCHAR(50)
 )
 BEGIN
-	SELECT name FROM commands
-	WHERE channel = this_channel;
+	INSERT INTO globals (name, val, channel)
+	VALUES (global_name, global_value, this_channel);
 END 

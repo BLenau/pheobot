@@ -1,22 +1,35 @@
 <?php
 /**
- * socket.php
+ * This file contains the interface responsible for interacting with a chat
+ * server using sockets.
  * 
- * A file containing the connection definition using sockets.
+ * Copyright (C) 2014 Brian M. Lenau
  * 
- * @author Brian M. Lenau
- * @version 0.01
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * 
+ * @license http://www.gnu.org/licenses/
+ * 
+ * @author Brian M. Lenau <blenau@gmail.com>
  */
 namespace IRC\Connection;
-
-require("connection.php");
 
 /**
  * A class that uses sockets to connect and interact with an IRC server.
  *
  * @author Brian M. Lenau
  */
-class Socket implements Connection {
+class SocketConnection implements Connection {
 	
 	/**
 	 * The address of the server that will be connected to.
@@ -71,7 +84,8 @@ class Socket implements Connection {
 	 * 
 	 * @param string $data The data that will be sent to the server
 	 * 
-	 * @return boolean FALSE if an error occurs
+	 * @return mixed A response from the server
+	 *               FALSE if an error occurs
 	 */
 	public function send($data) {
 		$data .= "\r\n";

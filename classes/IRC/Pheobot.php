@@ -1,54 +1,34 @@
 <?php
 /**
- * pheobot.php
+ * This file contains the class definition of the boss.
  * 
- * This file contains the workhorse class for the Pheobot.  This class is
- * respinsible for reacting to the data that the retrieved from the server.
+ * Copyright (C) 2014 Brian M. Lenau
  * 
- * @author Brian M. Lenau
- * @version 0.01
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * 
+ * @license http://www.gnu.org/licenses/
+ * 
+ * @author Brian M. Lenau <blenau@gmail.com>
  */
 namespace IRC;
-
-require("connection/socket.php");
-//require("db/mysql.php");
 
 /**
  * An IRC bot that is used to connect to Twitch chat (other chats to be 
  * implemented later).  This bot should be able to read the chat and react
  * to the things said there.
  */
-class Bot {
-    
-    /**
-     * The connection that is used to connect to the server.
-     * 
-     * @var \Common\Connection
-     */
-    private $connection;
-    
-    /**
-     * The controller used to interact with the database.
-     * 
-     * @var \DB\DatabaseController
-     */
-    private $controller;
-    
-    /**
-     * The type of controller to use.
-     * Options -
-     *     MySQL - A controller that uses MySQL to connect to a database
-     * 
-     * @var string
-     */
-    private $controller_type = "MySQL";
-    
-    /**
-     * The controller configuration file.
-     * 
-     * @var string
-     */
-    private $controller_file = "../../config/config_mysql.php";
+class Pheobot {
     
     /**
      * A list of the channels that the bot should be connected to.
@@ -87,11 +67,11 @@ class Bot {
     private $max_reconnects = 0;
     
     /**
-     * The handler that is responsible for all commands.
+     * The manager that is responsible for all commands.
      * 
-     * @var \IRC\Commands\Handler
+     * @var \IRC\Commands\Manager
      */
-    private $command_handler;
+    private $command_manager;
 
     /**
      * The prefix that is used to define that a command is being invoked.
@@ -99,6 +79,13 @@ class Bot {
      * @var string
      */
     private $command_prefix = "!";
+    
+    /**
+     * The connection used to send and receive data from the server.
+     * 
+     * @var \IRC\Connection\Connection
+     */
+    private $connection;
     
     /**
      * The directory where log files will be stored.
@@ -151,7 +138,7 @@ class Bot {
      * 
      * @var string
      */
-    private $last_com = "1991-03-08";
+    private $last_com = "0";
     
     /**
      * Creates a new Bot.
@@ -161,7 +148,8 @@ class Bot {
      */
     public function __construct($config = array()) {
     	$this->open_logs();
-    	$this->connection = new \IRC\Connection\Socket;
+    	$this->command_manager = new \IRC\Command\Manager();
+    	$this->connection = new \IRC\Connection\SocketConnection();
     }
     
     /**
@@ -191,6 +179,7 @@ class Bot {
      * Disconnects the bot from the server.
      */
     public function disconnect() {
+        $this->connection->disconnect();
     }
     
     /**
@@ -210,7 +199,7 @@ class Bot {
      * @param string $message The message to send to the chat
      */
     public function send_message($data) {
-        $this->send("PRIVMSG #$channel :$data");
+        $this->send("PRIVMSG #$this->channel :$data");
     }
     
     /**
@@ -310,7 +299,21 @@ class Bot {
                 	$this->set_mode($data);
                 }
     			if ($args[1] == "PRIVMSG") {
-    				$this->handler->execute($data);
+    			    $tokens = explode("!", $args[0]);
+    			    $user = trim($tokens[0]);
+    			    $user = substr($user, 1);
+
+                    $command = trim($args[3]) . " " . $user . " " . $this->channel;
+    			    for ($i = 4; $i < count($args); $i++) {
+    			        $command .= " " . trim($args[$i]);
+                    }
+    			    $command = substr($command, 1);
+    			    if (stripos($command, $this->command_prefix) === 0) {
+                        $result = $this->command_manager->execute($command);
+                        if ($result) {
+                            $this->send_message($result);
+                        }
+    			    }
     			}
     		}
     	}
@@ -344,10 +347,6 @@ class Bot {
             }
         }
     }
-
-    /** ------------------------------------------------------------------- **
-     * Reserved Commands
-     ** ------------------------------------------------------------------- **/
 
     /**
      * Displays a list of moderators.
@@ -497,7 +496,7 @@ class Bot {
      */
     public function set_controller_file($config_file) {
         $this->controller_file = $config_file;
-        create_controller();
+        $this->create_controller();
     }
     
     /**
@@ -509,7 +508,7 @@ class Bot {
         $l_type = strtolower($type);
         if (file_exists("db/$l_type.php")) {
             $this->controller_type = $type;
-            create_controller();
+            $this->create_controller();
         }
     }
 }

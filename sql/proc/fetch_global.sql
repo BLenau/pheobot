@@ -4,12 +4,15 @@
 -- --------------------------------------------------------------------------------
 DELIMITER $$
 
-CREATE DEFINER=`blenau`@`localhost` PROCEDURE `retrieve_command`(
-IN com_name VARCHAR(50)
+USE `pheobot`;
+
+DROP PROCEDURE IF EXISTS `fetch_global`;
+CREATE DEFINER=`blenau`@`localhost` PROCEDURE `fetch_global`(
+IN global_name VARCHAR(50),
+IN global_channel VARCHAR(50)
 )
 BEGIN
-	SELECT c.command as command, m.mode as mode FROM commands as c
-	LEFT JOIN modes as m
-	ON c.mode = m.mode
-	WHERE name = com_name;
+	SELECT val FROM globals
+	WHERE name = global_name
+	AND channel = global_channel;
 END 
