@@ -38,6 +38,32 @@ class GlobalHandler implements \IRC\Command\Handler {
     private $commands;
     
     /**
+     * A list of the nasty messages to send when the death counter rolls.
+     * 
+     * @var array
+     */
+    private $ded_messages;
+    
+    /**
+     * A list of the nasty messages to send when you reset.
+     * 
+     * @var array
+     */
+    private $reset_messages = array(
+        "Did you really just reset? DansGame",
+        "Strimmer, are you ever going to finish a run? OMGScoots",
+        "TriHard R TriHard E TriHard S TriHard E TriHard T TriHard",
+        "This guy... Thinks he's gotta get the perfect run. FUNgineer Who does he think he is, Cosmo?"
+    );
+    
+    /**
+     * The counter for deaths.
+     * 
+     * @var int
+     */
+    private $deaths = 0;
+    
+    /**
      * A list of methods to ignore when listing the commands.
      * 
      * @var array
@@ -49,6 +75,7 @@ class GlobalHandler implements \IRC\Command\Handler {
      */
     public function __construct() {
         $this->commands = array();
+        $this->mods = array();
     }
     
     /**
@@ -128,6 +155,20 @@ class GlobalHandler implements \IRC\Command\Handler {
         return "HYPE! TriHard";
     }
     
+    private function ded($args) {
+        $this->deaths = $this->deaths + 1;
+        $this->update_ded_messages();
+        $rand = rand(0, count($this->ded_messages) - 1);
+        return $this->ded_messages[$rand];
+    }
+    
+    private function reset($args) {
+        $this->deaths = 0;
+        $this->update_ded_messages();
+        $rand = rand(0, count($this->reset_messages) - 1);
+        return $this->reset_messages[$rand];
+    }
+    
     private function mods($args) {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, "https://tmi.twitch.tv/group/user/{$args[1]}/chatters");
@@ -147,6 +188,36 @@ class GlobalHandler implements \IRC\Command\Handler {
                 $space = " ";
             }
             return "Currently online mods: $mods KevinTurtle";
+        }
+    }
+    
+    private function FuckAndre($args) {
+        return "http://imgur.com/59qijmI TriHard";
+    }
+    
+    private function update_ded_messages() {
+        if ($this->deaths == 1) {
+            $this->ded_messages = array(
+                "Dude, this guy... He has died {$this->deaths} time... FailFish",
+                "Strimmer, can you please stop dying? You've already done so {$this->deaths} time! OMGScoots",
+                "WOW. FUNgineer I don't even have words now that you've died {$this->deaths} time...",
+                "REALLY?! {$this->deaths} death? Are you kidding me? FailFish",
+                "Someone buy this guy some lives. After {$this->deaths} death, he's gonna need them!",
+                "{$this->deaths} death?! Is this a joke? DansGame",
+                "At this point, I think dying is his goal. He's done it {$this->deaths} time already. FUNgineer",
+                "¸. ¸ 　★　 :.　 . • ○ ° ★　 .　 *　.　.　　¸ .　　 ° 　¸. * ● ¸ .　...somewhere　　　° ☾ ° 　¸. ● ¸ .　　★　° :.　 . • ° 　 .　 *　:.　.in a parallel universe* ● ¸ 　　　　° ☾ °☆ 　. * ¸.　　　★　★ ° . .　　　　.　☾ °☆ 　. * ● ¸ strimmer has died less than {$this->deaths} time...° ☾　★ °● ¸ .　　　★　°",
+            );
+        } else {
+            $this->ded_messages = array(
+                "Dude, this guy... He has died {$this->deaths} times... FailFish",
+                "Strimmer, can you please stop dying? You've already done so {$this->deaths} times! OMGScoots",
+                "WOW. FUNgineer I don't even have words now that you've died {$this->deaths} times...",
+                "REALLY?! {$this->deaths} deaths? Are you kidding me? FailFish",
+                "Someone buy this guy some lives. After {$this->deaths} deaths, he's gonna need them!",
+                "{$this->deaths} deaths?! Is this a joke? DansGame",
+                "At this point, I think dying is his goal. He's done it {$this->deaths} times already. FUNgineer",
+                "¸. ¸ 　★　 :.　 . • ○ ° ★　 .　 *　.　.　　¸ .　　 ° 　¸. * ● ¸ .　...somewhere　　　° ☾ ° 　¸. ● ¸ .　　★　° :.　 . • ° 　 .　 *　:.　.in a parallel universe* ● ¸ 　　　　° ☾ °☆ 　. * ¸.　　　★　★ ° . .　　　　.　☾ °☆ 　. * ● ¸ strimmer has died less than {$this->deaths} times...° ☾　★ °● ¸ .　　　★　°",
+            );
         }
     }
 }

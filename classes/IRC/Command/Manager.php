@@ -57,8 +57,9 @@ class Manager {
                     $tokens = explode(".", $filename);
                     $class = "\\IRC\\Command\\Handler\\" . $tokens[0];
                     $handler = new $class();
-                    $this->handlers[] = new $class();
                     if ($handler->type() == "DatabaseHandler") {
+                    } else {
+                        $this->handlers[] = new $class();
                     }
                 }
             }
@@ -92,7 +93,7 @@ class Manager {
                 return $result;
             }
         }
-        return "I don't know how to do that yet. OpieOP";
+        return false;
     }
 }
 ?>

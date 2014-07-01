@@ -309,10 +309,13 @@ class Pheobot {
                     }
     			    $command = substr($command, 1);
     			    if (stripos($command, $this->command_prefix) === 0) {
-                        $result = $this->command_manager->execute($command);
-                        if ($result) {
-                            $this->send_message($result);
-                        }
+    			        $this->update_roles();
+    			        if (in_array($user, $this->mods)) {
+                            $result = $this->command_manager->execute($command);
+                            if ($result) {
+                                $this->send_message($result);
+                            }
+    			        }
     			    }
     			}
     		}
@@ -338,7 +341,7 @@ class Pheobot {
      * Updates the roles of all the users on the chat.
      */
     private function update_roles() {
-        @$json = file_get_contents("https://tmi.twitch.tv/group/user/pheogia/chatters");
+        @$json = file_get_contents("https://tmi.twitch.tv/group/user/{$this->channel}/chatters");
         if ($json) {
             $chatters = json_decode($json, true);
             $this->mods = array();
